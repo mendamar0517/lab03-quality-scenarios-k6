@@ -1,19 +1,16 @@
-# Lab 03 --- Quality Scenarios → SLO → k6 Threshold
+# Lab 03 — Quality Scenarios → SLO → k6 Threshold
 
-**Оюутан:** О.Мэнд-Амар
-**Оюутны код:** B232270001
-**Лаборатори:** Lab 03 --- Quality Scenarios and SLO Threshold Testing
+**Оюутан:** О.Мэнд-Амар  
+**Оюутны код:** B232270001  
+**Лаборатори:** Lab 03 — Quality Scenarios and SLO Threshold Testing
 
 ---
 
 ## 1. Лабораторийн зорилго
 
-Энэхүү лабораторийн ажлын зорилго нь Lecture 3-т үзсэн Quality Scenario
-ойлголтыг ашиглан системийн Performance, Reliability, Availability
-чанарын шаардлагуудыг тодорхойлох, тэдгээрийг SLO болгон хувиргах,
-улмаар k6 threshold ашиглан автоматаар шалгах явдал юм.
+Энэ лабораторийн ажлаар Lecture 3-т үзсэн **Quality Scenario** ойлголтыг өөрийн локал API дээр туршиж үзсэн. Эхлээд Performance, Reliability, Availability гэсэн гурван чанарын scenario-г тодорхойлж, дараа нь тэдгээрийг SLO болгон хувиргасан. Эцэст нь SLO бүрийг k6 threshold-ээр шалгаж, хэвийн ажиллагааны үр дүн, server тасалсан chaos test, мөн зориудаар FAIL болгосон test-ийн output-уудыг хадгалсан.
 
-Хэрэгжүүлсэн бүрэн pipeline:
+Хэрэгжүүлсэн pipeline:
 
 ```text
 Quality Scenario
@@ -50,7 +47,7 @@ Evidence and Analysis
 k6 v2.2.0 (commit/devel, go1.26.5, darwin/arm64)
 ```
 
-Version-ийн output: `results/k6-version.txt`
+Version-ийн бүрэн output: [`results/k6-version.txt`](results/k6-version.txt)
 
 ---
 
@@ -73,26 +70,32 @@ lab03/
 └── docs/
 ```
 
+Файлууд руу шууд орох холбоосууд:
+
+- [`server.js`](server.js) — локал Express API
+- [`slo-test.js`](slo-test.js) — үндсэн SLO threshold test
+- [`slo-test-fail.js`](slo-test-fail.js) — зориудаар FAIL үүсгэсэн test
+- [`results/`](results/) — бүх test-ийн output
+- [`.gitignore`](.gitignore) — repository-д оруулахгүй файлуудын тохиргоо
+- [`package.json`](package.json) — Node.js project configuration
+
 `node_modules/` болон `.DS_Store` нь `.gitignore`-д орсон.
 
 ---
 
 # 4. Local API
 
-Лабораторийн туршилтад Node.js + Express дээр суурилсан локал API
-ашигласан.
+Лабораторийн туршилтад Node.js + Express дээр ажиллах энгийн локал API ашигласан. API-ийн бүрэн кодыг [`server.js`](server.js) файлаас харж болно.
 
-Method Endpoint Үүрэг
-
----
-
-POST `/cart/add` Cart-д item нэмэх
-GET `/report` Report боловсруулах
-POST `/pay` Payment хийх
+| Method | Endpoint    | Үүрэг               |
+| ------ | ----------- | ------------------- |
+| POST   | `/cart/add` | Cart-д item нэмэх   |
+| GET    | `/report`   | Report боловсруулах |
+| POST   | `/pay`      | Payment хийх        |
 
 ### `/cart/add`
 
-Амжилттай response:
+Энэ endpoint нэмэлт delay эсвэл зориудаар үүсгэсэн failure-гүй, энгийн `200 OK` response буцаана.
 
 ```json
 {
@@ -103,7 +106,7 @@ POST `/pay` Payment хийх
 
 ### `/report`
 
-Endpoint нь зориудаар 200--400ms орчим delay үүсгэнэ:
+Энэ endpoint дээр response latency-г туршихын тулд зориудаар 200–400ms орчим delay өгсөн.
 
 ```javascript
 await sleep(200 + Math.random() * 200);
@@ -119,60 +122,38 @@ Response:
 
 ### `/pay`
 
-Payment endpoint нь зориудаар ойролцоогоор 5%-ийн failure
-probability-тэй:
+Payment endpoint дээр failure rate-ийг туршихын тулд ойролцоогоор 5%-ийн failure probability зориудаар оруулсан.
 
 ```javascript
 if (Math.random() < 0.05)
   return res.status(500).json({ error: "gateway timeout" });
 ```
 
+Ингэснээр Reliability scenario дээр бодит failure-ийг хэмжих боломжтой болсон.
+
 ---
 
 # 5. Quality Scenarios
 
-Scenario бүр Lecture 3-ын дараах 6 хэсгээр тодорхойлогдсон:
+Scenario бүрийг Lecture 3-ын дараах 6 хэсгээр тодорхойлсон:
 
-1.  Overview
-2.  System state
-3.  Environment state
-4.  External stimulus
-5.  Required response
-6.  Response measure
+1. Overview
+2. System state
+3. Environment state
+4. External stimulus
+5. Required response
+6. Response measure
 
-## 5.1 Performance Scenario --- `/cart/add`
+## 5.1 Performance Scenario — `/cart/add`
 
----
-
-Scenario хэсэг Тодорхойлолт
-
----
-
-**Overview** Cart-д item нэмэх үйлдэл хэвийн
-ачааллын үед хурдан response өгөх
-ёстой.
-
-**System state** Local API ажиллаж байгаа бөгөөд
-`/cart/add` endpoint request хүлээн
-авахад бэлэн байна.
-
-**Environment state** macOS дээр Node.js + Express API
-ажиллаж байна. k6 нь 20 VUs
-ашиглана.
-
-**External stimulus** 20 concurrent VUs хэвийн ачааллын
-үед `POST /cart/add` request
-илгээнэ. Test window нь 1 минут.
-
-**Required response** Request бүр HTTP 200 response
-буцаах ёстой.
-
-**Response measure** `/cart/add` response latency-ийн
-p95 нь 50ms-ээс бага байна. Мөн
-`cart 200` check-ээр амжилтыг
-шалгана.
-
----
+| Scenario хэсэг        | Тодорхойлолт                                                                                            |
+| --------------------- | ------------------------------------------------------------------------------------------------------- |
+| **Overview**          | Cart-д item нэмэх үйлдэл хэвийн ачааллын үед хурдан response өгөх ёстой.                                |
+| **System state**      | Local API ажиллаж байгаа бөгөөд `/cart/add` endpoint request хүлээн авахад бэлэн байна.                 |
+| **Environment state** | macOS дээр Node.js + Express API ажиллаж байна. k6 нь 20 VUs ашиглана.                                  |
+| **External stimulus** | 20 concurrent VUs хэвийн ачааллын үед `POST /cart/add` request илгээнэ. Test window нь 1 минут.         |
+| **Required response** | Request бүр HTTP 200 response буцаах ёстой.                                                             |
+| **Response measure**  | `/cart/add` response latency-ийн p95 нь 50ms-ээс бага байна. Мөн `cart 200` check-ээр амжилтыг шалгана. |
 
 ### Performance SLO
 
@@ -185,37 +166,16 @@ Window: 1 minute
 
 ---
 
-## 5.2 Reliability Scenario --- `/pay`
+## 5.2 Reliability Scenario — `/pay`
 
----
-
-Scenario хэсэг Тодорхойлолт
-
----
-
-**Overview** Payment үйлдлийг хэвийн ажиллагааны
-үед тогтвортой боловсруулж,
-failure-ийн давтамжийг хязгаарлах
-ёстой.
-
-**System state** Local API ажиллаж байгаа бөгөөд
-`/pay` endpoint request хүлээн
-авахад бэлэн байна.
-
-**Environment state** macOS дээр Node.js + Express API
-ажиллаж байна. k6 нь 20 VUs
-ашиглана.
-
-**External stimulus** 20 VUs 1 минутын турш хэвийн
-payment request илгээнэ.
-
-**Required response** Payment request-үүдийн failure rate
-зөвшөөрөгдөх хязгаараас бага байна.
-
-**Response measure** `/pay` endpoint-ийн HTTP request
-failure rate 8%-аас бага байна.
-
----
+| Scenario хэсэг        | Тодорхойлолт                                                                                             |
+| --------------------- | -------------------------------------------------------------------------------------------------------- |
+| **Overview**          | Payment үйлдлийг хэвийн ажиллагааны үед тогтвортой боловсруулж, failure-ийн давтамжийг хязгаарлах ёстой. |
+| **System state**      | Local API ажиллаж байгаа бөгөөд `/pay` endpoint request хүлээн авахад бэлэн байна.                       |
+| **Environment state** | macOS дээр Node.js + Express API ажиллаж байна. k6 нь 20 VUs ашиглана.                                   |
+| **External stimulus** | 20 VUs 1 минутын турш хэвийн payment request илгээнэ.                                                    |
+| **Required response** | Payment request-үүдийн failure rate зөвшөөрөгдөх хязгаараас бага байна.                                  |
+| **Response measure**  | `/pay` endpoint-ийн HTTP request failure rate 8%-аас бага байна.                                         |
 
 ### Reliability SLO
 
@@ -226,46 +186,20 @@ Load: 20 VUs
 Window: 1 minute
 ```
 
-`/pay` endpoint нь зориудаар ойролцоогоор 5%-ийн failure probability
-үүсгэдэг тул 8%-ийн threshold сонгосон.
+`/pay` endpoint өөрөө ойролцоогоор 5%-ийн failure probability-тэй тул 8%-ийг хүлээн зөвшөөрөх дээд хязгаар болгон сонгосон.
 
 ---
 
-## 5.3 Availability Scenario --- API Server Failure
+## 5.3 Availability Scenario — API Server Failure
 
----
-
-Scenario хэсэг Тодорхойлолт
-
----
-
-**Overview** Server failure гарсан үед системийн
-availability болон recovery
-behavior-ийг шалгана.
-
-**System state** Local API хэвийн ажиллаж, k6-ээс
-ирэх request-үүдийг боловсруулж
-байна.
-
-**Environment state** macOS localhost орчинд Node.js +
-Express server ажиллаж байна. k6 нь
-20 VUs-тай 2 минут ажиллана.
-
-**External stimulus** API server-ийг зориудаар зогсоож,
-ойролцоогоор 10 секундын дараа
-дахин асаана.
-
-**Required response** Failure үед request failures
-ажиглагдаж, server restart хийсний
-дараа систем дахин request
-боловсруулах боломжтой болно.
-
-**Response measure** Availability percentage, failure
-detection/recovery behavior болон
-request/check-based availability
-хэмжинэ. Availability SLO нь ≥90%.
-
----
+| Scenario хэсэг        | Тодорхойлолт                                                                                                                                                 |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Overview**          | Server failure гарсан үед системийн availability болон recovery behavior-ийг шалгана.                                                                        |
+| **System state**      | Local API хэвийн ажиллаж, k6-ээс ирэх request-үүдийг боловсруулж байна.                                                                                      |
+| **Environment state** | macOS localhost орчинд Node.js + Express server ажиллаж байна. k6 нь 20 VUs-тай 2 минут ажиллана.                                                            |
+| **External stimulus** | API server-ийг зориудаар зогсоож, ойролцоогоор 10 секундын дараа дахин асаана.                                                                               |
+| **Required response** | Failure үед request failures ажиглагдаж, server restart хийсний дараа систем дахин request боловсруулах боломжтой болно.                                     |
+| **Response measure**  | Availability percentage болон request/check-based availability-г хэмжиж, server restart-ийн дараах recovery behavior-ийг ажиглана. Availability SLO нь ≥90%. |
 
 ### Availability SLO
 
@@ -281,39 +215,24 @@ Failure duration: approximately 10 seconds
 
 # 6. Scenario → SLO → Threshold
 
----
+Үндсэн threshold-уудыг [`slo-test.js`](slo-test.js) дотор мөн адил утгаар хэрэгжүүлсэн.
 
-Quality SLI SLO k6 Threshold Window / Load
-Attribute
+| Quality                          | SLI                            | SLO         | k6 Threshold | Window / Load  |
+| -------------------------------- | ------------------------------ | ----------- | ------------ | -------------- |
+| Performance `/cart/add`          | p95 latency                    | p95 < 50ms  | `p(95)<50`   | 20 VUs / 1 min |
+| Reliability `/pay`               | error rate                     | < 8%        | `rate<0.08`  | 20 VUs / 1 min |
+| Availability                     | successful checks/request rate | ≥ 90%       | `rate>0.90`  | 20 VUs / 2 min |
+| Supporting Performance `/report` | p95 latency                    | p95 < 450ms | `p(95)<450`  | 20 VUs / 1 min |
 
----
-
-Performance `/cart/add` p95 p95 \< 50ms `p(95)<50` 20 VUs / 1 min
-latency
-
-Reliability `/pay` error \< 8% `rate<0.08` 20 VUs / 1 min
-rate
-
-Availability successful ≥ 90% `rate>0.90` 20 VUs / 2 min
-checks/request  
- rate
-
-Supporting `/report` p95 p95 \< 450ms `p(95)<450` 20 VUs / 1 min
-Performance latency
-
----
-
-README-д тодорхойлсон үндсэн threshold болон `slo-test.js` доторх
-threshold-ууд ижил.
+README-д тодорхойлсон үндсэн threshold болон [`slo-test.js`](slo-test.js) доторх threshold-ууд ижил.
 
 ---
 
 # 7. Threshold сонгосон үндэслэл
 
-### `/cart/add` --- p95 \< 50ms
+### `/cart/add` — p95 < 50ms
 
-`/cart/add` нь localhost дээр бага latency-тэй энгийн endpoint тул
-50ms-ийн p95 threshold ашигласан.
+`/cart/add` нь localhost дээр нэмэлт delay-гүй энгийн endpoint учраас 50ms-ийн p95 threshold ашигласан. Энэ босго нь зориудаар хэт сул биш, мөн local орчны жижиг хэлбэлзлийг тооцох боломжтой байхаар сонгосон.
 
 PASS test-ийн actual result:
 
@@ -321,10 +240,9 @@ PASS test-ийн actual result:
 p(95) = 1.61ms
 ```
 
-### `/pay` --- error rate \< 8%
+### `/pay` — error rate < 8%
 
-`/pay` endpoint нь зориудаар ойролцоогоор 5%-ийн failure probability
-үүсгэдэг. Тиймээс 8%-ийн error-rate threshold сонгосон.
+`/pay` endpoint нь өөрөө ойролцоогоор 5%-ийн failure probability үүсгэдэг. Тиймээс бага хэмжээний random хэлбэлзлийг зөвшөөрөхийн тулд 8%-ийн error-rate threshold сонгосон.
 
 PASS test-ийн actual result:
 
@@ -332,34 +250,35 @@ PASS test-ийн actual result:
 error rate = 6.01%
 ```
 
-### Availability --- ≥ 90%
+### Availability — ≥ 90%
 
 Availability scenario-д 90%-ийн SLO ашигласан.
 
 ```text
 2 minutes = 120 seconds
 100% - 90% = 10%
+
 120 × 0.10 = 12 seconds
 ```
 
-Иймээс 2 минутын window-ийн time-based error budget нь **12 seconds**.
+Иймээс 2 минутын window-ийн **time-based error budget = 12 seconds**.
 
-### `/report` --- p95 \< 450ms
+### `/report` — p95 < 450ms
 
-`/report` endpoint нь 200--400ms орчим delay үүсгэдэг тул p95 \< 450ms
-threshold сонгосон.
+`/report` endpoint дээр 200–400ms орчим зориудаар delay өгсөн. Туршилтаар хэмжихэд энэ endpoint-ийн p95 нь 389.16ms байсан тул 450ms-ийн threshold сонгосон.
 
 ---
 
 # 8. k6 Threshold Implementation
 
-`slo-test.js` файлд:
+Үндсэн test-ийн кодыг [`slo-test.js`](slo-test.js) файлаас бүтнээр харж болно.
+
+Threshold хэсэг:
 
 ```javascript
 export const options = {
   vus: 20,
   duration: "1m",
-
   thresholds: {
     "http_req_duration{name:cart}": ["p(95)<50"],
     "http_req_failed{name:pay}": ["rate<0.08"],
@@ -369,7 +288,7 @@ export const options = {
 };
 ```
 
-Endpoint бүрийг тусгай tag ашиглан ялгасан:
+Endpoint бүрийг тусгай `name` tag ашиглан ялгасан:
 
 ```javascript
 {
@@ -389,9 +308,13 @@ Endpoint бүрийг тусгай tag ашиглан ялгасан:
 }
 ```
 
+Ингэснээр `/cart/add`, `/report`, `/pay` endpoint-үүдийн metric-ийг тусад нь threshold-ээр шалгах боломжтой болсон.
+
 ---
 
 # 9. PASS Test
+
+Ашигласан команд:
 
 ```bash
 k6 run slo-test.js 2>&1 | tee results/pass.txt
@@ -422,14 +345,12 @@ http_req_failed{name:pay}
 
 ### Summary
 
-Metric Actual Threshold Result
-
----
-
-Checks 97.99% \> 90% PASS
-Cart p95 1.61ms \< 50ms PASS
-Report p95 389.16ms \< 450ms PASS
-Pay error rate 6.01% \< 8% PASS
+| Metric         |   Actual | Threshold | Result   |
+| -------------- | -------: | --------: | -------- |
+| Checks         |   97.99% |     > 90% | **PASS** |
+| Cart p95       |   1.61ms |    < 50ms | **PASS** |
+| Report p95     | 389.16ms |   < 450ms | **PASS** |
+| Pay error rate |    6.01% |      < 8% | **PASS** |
 
 Additional results:
 
@@ -439,29 +360,30 @@ HTTP requests: 2793
 Failed HTTP requests: 56
 ```
 
-Бүрэн output: `results/pass.txt`
+**Бүрэн output:** [`results/pass.txt`](results/pass.txt)
 
 ---
 
 # 10. Chaos Experiment
 
-Availability scenario-г шалгахын тулд 2 минутын k6 test ажиллаж байх үед
-API server-ийг зориудаар зогсоосон.
+Availability scenario-г шалгахын тулд 2 минутын k6 test ажиллаж байх үед API server-ийг зориудаар зогсоосон.
 
 ### Experiment
 
-1.  API server ажиллуулсан.
-2.  k6 test-ийг 20 VUs, 2 minutes-аар эхлүүлсэн.
-3.  Test ажиллаж байх үед server-ийг Ctrl+C ашиглан зогсоосон.
-4.  Server-ийг ойролцоогоор 10 секунд унтраалттай байлгасан.
-5.  Server-ийг дахин асаасан.
-6.  k6 test 2 минут дуустал үргэлжилсэн.
+1. API server-ийг ажиллуулсан.
+2. k6 test-ийг 20 VUs, 2 минутын тохиргоотой эхлүүлсэн.
+3. Test ажиллаж байх үед server-ийг `Ctrl+C` ашиглан зогсоосон.
+4. Server-ийг ойролцоогоор 10 секунд унтраалттай байлгасан.
+5. Server-ийг дахин асаасан.
+6. k6 test 2 минут дуустал үргэлжилсэн.
+
+Энэ туршилтын зорилго нь server failure гарсан үед request-үүд хэрхэн өөрчлөгдөж байгааг болон restart-ийн дараа request боловсруулах ажиллагаа сэргэж байгаа эсэхийг харах байсан.
 
 ---
 
 # 11. Chaos Test Results
 
-Бүрэн output: `results/chaos.txt`
+**Бүрэн output:** [`results/chaos.txt`](results/chaos.txt)
 
 ### Actual threshold results
 
@@ -479,8 +401,7 @@ http_req_failed{name:pay}
 ✗ 'rate<0.08' rate=26.10%
 ```
 
-Chaos test-ийн үед availability болон `/pay` reliability threshold
-хоёулаа зөрчигдсөн.
+Chaos test-ийн үед availability check rate 76.94% болж, 90%-ийн threshold-ээс доош орсон. Мөн server бүхэлдээ унтарсан хугацаанд `/pay` request-үүд ч failed болсон тул `/pay` error rate 26.10% болж өссөн.
 
 ---
 
@@ -520,6 +441,16 @@ Required SLO = ≥ 90%
 
 → Availability threshold **FAIL**.
 
+Мөн k6-ийн `checks` статистикт:
+
+```text
+checks_total = 5826
+checks_succeeded = 4483
+checks_failed = 1343
+```
+
+гэж гарсан бөгөөд энэ нь дээрх request-based availability тооцоотой таарч байна.
+
 ---
 
 # 13. Time-Based Error Budget ба Request-Based Availability
@@ -545,20 +476,25 @@ Time-based error budget:
 
 Иймээс time-based availability error budget нь **12 seconds**.
 
-Chaos experiment-д server ойролцоогоор 10 секунд зогссон.
+Chaos experiment-д server ойролцоогоор 10 секунд зогссон. Гэхдээ энд хоёр өөр хэмжүүрийг ялгах хэрэгтэй.
 
-Гэхдээ request-based availability нь хугацаагаар бус request-ийн үр
-дүнгээр хэмжигддэг:
+Time-based error budget нь:
+
+```text
+outage time
+```
+
+дээр үндэслэнэ.
+
+Харин энэ лабораторид k6-ээр тооцсон request-based availability нь:
 
 ```text
 successful requests / total requests
 ```
 
-Server унтарсан үед failed request-үүд хурдан буцаж болох тул 10
-секундийн outage-ийн хугацаанд олон failed request үүсч болно.
+дээр үндэслэсэн.
 
-Иймээс 12 секундийн time-based error budget болон 76.94%-ийн
-request-based availability нь ижил хэмжүүр биш.
+Server унтарсан үед connection failure хурдан буцаж болох тул тухайн 10 секундийн outage-ийн хугацаанд олон failed request үүсэх боломжтой. Тиймээс **12 секундийн time-based error budget** болон **76.94%-ийн request-based availability** нь шууд нэг тоо болгон харьцуулах хоёр ижил хэмжүүр биш.
 
 ---
 
@@ -576,10 +512,9 @@ PASS test-ийн үед `/pay` error rate:
 6.01% < 8%
 ```
 
-тул reliability SLO PASS болсон.
+тул reliability threshold PASS болсон.
 
-Chaos үед server бүхэлдээ унтарсан тул `/pay` request-үүд мөн failed
-болсон:
+Chaos test-ийн үед server бүхэлдээ унтарсан тул `/pay` request-үүд мөн failed болсон:
 
 ```text
 /pay failed = 507 / 1942
@@ -599,19 +534,15 @@ Chaos үед server бүхэлдээ унтарсан тул `/pay` request-үү
 
 тул `/pay` reliability threshold chaos test-ийн үед FAIL болсон.
 
-Reliability нь хэвийн ажиллагааны үед failure хэр олон гарч байгааг
-хэмждэг бол availability нь failure гарсан үед системийн ажиллах боломж
-болон recovery behavior-тэй холбоотой.
+Эндээс хоёр хэмжүүрийн зорилго ялгаатай харагдаж байна. **Reliability** scenario дээр хэвийн ажиллагааны үед payment request хэр олон удаа failure болж байгааг шалгасан. Харин **Availability** scenario дээр server failure гэсэн external stimulus өгөөд, систем request боловсруулах боломжоо хэр хадгалж байгаа болон restart-ийн дараа буцаж ажиллаж байгаа эсэхийг ажигласан.
 
 ---
 
 # 15. Deliberate FAIL Test
 
-Threshold механизм зөв ажиллаж байгааг шалгахын тулд зориудаар FAIL
-үүсгэсэн.
+Threshold механизм зөв ажиллаж байгааг шалгахын тулд зориудаар FAIL үүсгэсэн.
 
-`slo-test-fail.js` нь `slo-test.js`-ээс хуулбарлагдсан бөгөөд `/report`
-threshold-ийг:
+[`slo-test-fail.js`](slo-test-fail.js) нь үндсэн [`slo-test.js`](slo-test.js)-тэй ижил test бөгөөд `/report` threshold-ийг:
 
 ```text
 p(95)<450
@@ -623,14 +554,15 @@ p(95)<450
 p(95)<100
 ```
 
-болгосон.
+болгон өөрчилсөн.
 
-`/report` endpoint нь 200--400ms орчим delay үүсгэдэг тул 100ms
-threshold зориудаар хэт хатуу босго болсон.
+`/report` endpoint өөрөө 200–400ms орчим delay үүсгэдэг тул 100ms-ийн threshold-ийг зориудаар хангах боломжгүй нөхцөл болгосон.
 
 ---
 
 # 16. Deliberate FAIL Results
+
+Ашигласан команд:
 
 ```bash
 k6 run slo-test-fail.js 2>&1 | tee results/fail.txt
@@ -640,6 +572,7 @@ Actual result:
 
 ```text
 http_req_duration{name:report}
+
 ✗ 'p(95)<100' p(95)=391.74ms
 ```
 
@@ -658,20 +591,20 @@ http_req_failed{name:pay}
 
 ### Summary
 
-Metric Actual Threshold Result
-
----
-
-Report p95 391.74ms \< 100ms FAIL
-Checks 98.31% \> 90% PASS
-Cart p95 1.63ms \< 50ms PASS
-Pay error rate 5.05% \< 8% PASS
+| Metric         |   Actual | Threshold | Result   |
+| -------------- | -------: | --------: | -------- |
+| Report p95     | 391.74ms |   < 100ms | **FAIL** |
+| Checks         |   98.31% |     > 90% | **PASS** |
+| Cart p95       |   1.63ms |    < 50ms | **PASS** |
+| Pay error rate |    5.05% |      < 8% | **PASS** |
 
 k6 threshold failure message:
 
 ```text
 thresholds on metrics 'http_req_duration{name:report}' have been crossed
 ```
+
+**Бүрэн output:** [`results/fail.txt`](results/fail.txt)
 
 ---
 
@@ -689,51 +622,29 @@ Actual result:
 exit=99
 ```
 
-Иймээс deliberate threshold failure үед k6 exit code **99** байсан.
+Ингэснээр threshold зөрчигдсөн үед k6 зөвхөн terminal дээр FAIL гэж харуулах биш, process-ийн exit code-оор мөн failure-г буцааж байгааг шалгасан.
 
 ---
 
 # 18. Evidence Files
 
-### PASS
+Туршилтын output-уудыг `results/` folder дотор тусад нь хадгалсан.
 
-```text
-results/pass.txt
-```
+- **PASS:** [`results/pass.txt`](results/pass.txt) — хэвийн ажиллагааны бүрэн k6 output
+- **CHAOS:** [`results/chaos.txt`](results/chaos.txt) — server failure/recovery experiment-ийн бүрэн output
+- **DELIBERATE FAIL:** [`results/fail.txt`](results/fail.txt) — зориудаар threshold зөрчсөн test-ийн бүрэн output
+- **k6 Version:** [`results/k6-version.txt`](results/k6-version.txt) — ашигласан k6 version-ийн output
 
-Normal SLO test-ийн бүрэн k6 output.
-
-### CHAOS
-
-```text
-results/chaos.txt
-```
-
-Server failure/recovery experiment-ийн бүрэн k6 output.
-
-### DELIBERATE FAIL
-
-```text
-results/fail.txt
-```
-
-Зориудаар threshold зөрчсөн k6 test-ийн бүрэн output.
-
-### k6 Version
-
-```text
-results/k6-version.txt
-```
-
-Ашигласан k6 version-ийн output.
+Folder руу шууд орох: [`results/`](results/)
 
 ---
 
 # 19. Git Commit History
 
-Лабораторийн ажлыг үе шаттайгаар meaningful commit-уудаар хадгалсан.
+Лабораторийн ажлыг нэг дор биш, үе шаттайгаар meaningful commit-уудаар хадгалсан.
 
 ```text
+8062a0f Complete Lab 3 documentation
 31438b7 Record k6 version
 e58b1bf Add deliberate threshold failure test
 0eb9029 Add availability chaos test
@@ -741,16 +652,22 @@ e58b1bf Add deliberate threshold failure test
 652e12d Set up Lab 3 local API
 ```
 
-Ингэснээр 3+ meaningful commit-ийн шаардлагыг хангаж байна.
+GitHub дээрх commit history: [`Commits`](https://github.com/mendamar0517/lab03-quality-scenarios-k6/commits/main)
+
+Нийт 6 meaningful commit байгаа тул 3+ commit-ийн шаардлагыг хангаж байна.
 
 ---
 
 # 20. .gitignore
 
+[` .gitignore`](.gitignore) файлд:
+
 ```text
 node_modules/
 .DS_Store
 ```
+
+гэж тохируулсан.
 
 `node_modules/` repository-д commit хийгдээгүй.
 
@@ -758,43 +675,10 @@ node_modules/
 
 # 21. Дүгнэлт
 
-Энэхүү лабораторийн ажлаар Lecture 3-ын Quality Scenario ойлголтыг
-ашиглан Performance, Reliability, Availability гэсэн гурван чанарын
-scenario-г тодорхойлсон. Scenario бүрийг Overview, System state,
-Environment state, External stimulus, Required response, Response
-measure гэсэн зургаан хэсгээр тодорхойлж, хэмжигдэх SLI болон SLO болгон
-хувиргасан. Дараа нь SLO бүрийг k6 threshold болгон хэрэгжүүлж, normal
-load үед бүх үндсэн threshold PASS болсныг `results/pass.txt` файлаар
-баталгаажуулсан. PASS test-ийн үед `/cart/add` endpoint-ийн p95 latency
-1.61ms, `/report` endpoint-ийн p95 latency 389.16ms, `/pay` error rate
-6.01%, checks rate 97.99% байсан. Availability scenario-г шалгахын тулд
-API server-ийг зориудаар ойролцоогоор 10 секунд зогсоож, дараа нь дахин
-асаасан chaos experiment хийсэн. Chaos test-ийн request-based
-availability 76.94% болж, 90%-ийн SLO-г хангаагүй бөгөөд энэ нь failure
-stimulus системийн availability-д бодит нөлөө үзүүлснийг харуулсан. Мөн
-time-based 12 секундийн error budget болон request-based availability
-хоёр өөр хэмжилтийн ойлголт болохыг туршилтын үр дүнгээр тайлбарласан.
-Эцэст нь `/report` endpoint-ийн threshold-ийг зориудаар p95\<100ms
-болгон өөрчилж FAIL үүсгэн, k6-ийн threshold механизм болон exit code
-99-ийг баталгаажуулсан. Ингэснээр Scenario → SLO → Threshold → Test →
-Evidence гэсэн бүрэн pipeline-ийг хэрэгжүүлж дуусгасан.
+Энэ лабораторийн ажлаар Lecture 3-ын Quality Scenario ойлголтыг ашиглаад өөрийн локал API дээр Performance, Reliability, Availability гэсэн гурван scenario-г тодорхойлсон. Scenario бүрийг Overview, System state, Environment state, External stimulus, Required response, Response measure гэсэн зургаан хэсгээр тодорхойлж, дараа нь SLI болон SLO болгон хувиргасан. Хамгийн их анхаарах шаардлагатай хэсэг нь scenario дээр бичсэн шаардлагыг k6 дээр яг хэмжигдэхүйц threshold болгох байсан. Normal load test-ийн үед `/cart/add`, `/report`, `/pay` болон availability check-ийн threshold-ууд бүгд PASS болсон. Жишээлбэл `/cart/add` p95 нь 1.61ms, `/report` p95 нь 389.16ms, `/pay` error rate нь 6.01% гарсан. Дараа нь server-ийг ойролцоогоор 10 секунд зориудаар зогсоож chaos experiment хийхэд request-based availability 76.94% болж, 90%-ийн SLO-д хүрээгүй. Энэ туршилтаас time-based 12 секундын error budget болон request-based availability нь өөр өөр хэмжүүр гэдгийг бодитоор харж болохоор байсан. Мөн server унтарсан үед `/pay` error rate өссөн нь reliability болон availability-ийн хэмжүүрүүд failure-ийн үед хоорондоо давхардаж болох ч анх тавьсан зорилго нь өөр байдгийг харуулсан. Эцэст нь `/report` threshold-ийг p95<100ms болгон зориудаар хатууруулж FAIL test ажиллуулахад 391.74ms гарч, k6 exit code 99 буцсан. Ингэснээр Scenario → SLO → Threshold → Test → Evidence гэсэн pipeline-ийг өөрийн туршилтын output-оор бүрэн шалгасан.
 
 ---
 
 # 22. Optional AI Reflection
 
-AI ашиглан Quality Scenario-ийн эхний draft гаргах боломжтой боловч
-threshold-ийн утга, stimulus-ийн бодит байдал, system state болон
-хэмжүүрийн зөв сонголтыг хүний зүгээс шалгах шаардлагатай. AI нь
-системийн бодит behavior-ийг мэдэхгүй үед үндэслэлгүй threshold тоо
-санал болгож болох эрсдэлтэй. Энэ лабораторийн ажилд threshold-уудыг
-local API-ийн бодит behavior-тэй уялдуулан сонгосон. Жишээлбэл `/report`
-endpoint-ийн зориудын 200--400ms delay-ийг харгалзан normal
-threshold-ийг p95\<450ms болгосон. Харин deliberate FAIL test-д энэ
-threshold-ийг p95\<100ms болгон өөрчилж, бодит k6 output-оор
-threshold-ийн үр дүнг шалгасан. Scenario бүрийг Credible, Valuable,
-Specific, Precise, Comprehensible гэсэн чанаруудаар шалгах нь threshold
-болон requirement-ийн чанарыг сайжруулахад ашигтай. Иймээс AI-г scenario
-боловсруулахад туслах хэрэгсэл болгон ашиглаж болох боловч эцсийн SLO
-болон threshold сонголтыг бодит системийн behavior болон test evidence
-дээр үндэслэх шаардлагатай.
+AI ашиглан Quality Scenario-ийн эхний санаа эсвэл draft гаргаж болох боловч гарсан утгуудыг шууд ашиглахгүйгээр тухайн API-ийн бодит behavior-тэй тулгаж үзэх шаардлагатай. Энэ лабораторийн хувьд threshold сонгохдоо endpoint бүрийн ажиллах байдлыг харгалзсан. Жишээлбэл `/report` endpoint дээр 200–400ms delay байгаа тул normal threshold-ийг p95<450ms болгож, бодит test-ийн үр дүнгээр 389.16ms гарсныг шалгасан. Харин deliberate FAIL test дээр ижил endpoint-ийн threshold-ийг p95<100ms болгож өөрчилснөөр threshold үнэхээр зөрчигдөж байгаа эсэхийг шалгасан. Мөн Availability scenario дээр server-ийг зориудаар унтрааж үзсэн нь зөвхөн онолын requirement биш, бодит test-ээр шалгах боломжтой stimulus болгосон. Scenario бүрийг Credible, Valuable, Specific, Precise, Comprehensible гэсэн чанаруудаар нягталж үзэх нь шаардлага хэт ерөнхий эсвэл хэмжих боломжгүй болохоос сэргийлнэ. Миний хувьд AI-г эхний санаа боловсруулахад ашиглаж болох ч эцсийн scenario, SLO болон threshold-ийг test-ийн бодит output-той тулгаж байж шийдэх нь илүү зөв гэж үзсэн.
