@@ -1,4 +1,6 @@
-import { check, sleep } from "k6";
+// Deliberate FAIL test.
+// /report-ийн threshold-ийг зориудаар хэт хатуу болгож,
+// k6 threshold failure үүсэхийг шалгана.import { check, sleep } from "k6";
 import http from "k6/http";
 
 export const options = {
